@@ -83,6 +83,7 @@ class Conexao:
         self.timeoutInterval = 1
         self.desvioRTT = None
         self.RTTestimado = None
+        
 
     def _timer(self):
         if self.seg_no_ack:
@@ -154,8 +155,24 @@ class Conexao:
         # TODO: implemente aqui o envio de dados.
         # Chame self.servidor.rede.enviar(segmento, dest_addr) para enviar o segmento
         # que você construir para a camada de rede.
-        pass
+ 
+        dst_addr, dst_port, src_addr, src_port = self.id_conexao 
+        for i in range(int(len(dados)/MSS)):
+            begin = i * MSS
+            end_payload = min(len(dados), (i+1)*MSS) 
 
+            payload = dados[begin:end_payload]
+
+            # src_port, dst_port, seq_no, ack_no, flags
+            segment_flags = fix_checksum(make_header(src_port, dst_port, self.seq_no, self.ack_no, 0 | FLAGS_ACK )+payload, src_addr, dst_addr)
+
+
+            self.servidor.rede.enviar(segment_flags, dst_addr)
+            self.timer = asyncio.get_event_loop().call_later(self.timeoutInterval, self._timer)
+            self.seg_no_ack.append([segment_flags, len(payload), dst_addr, round(time(), 5)])
+            self.seq_no += len(payload)
+
+        
     def fechar(self):
         """
         Usado pela camada de aplicação para fechar a conexão
