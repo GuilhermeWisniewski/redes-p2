@@ -7,7 +7,7 @@ class Servidor:
     def __init__(self, rede, porta):
         self.rede = rede
         self.porta = porta
-        self.conexoes = {}
+        self.conexoes = {} # Dicionario de conexoes
         self.callback = None
         self.rede.registrar_recebedor(self._rdt_rcv)
 
@@ -63,7 +63,6 @@ class Servidor:
             print('%s:%d -> %s:%d (pacote associado a conexão desconhecida)' %
                   (src_addr, src_port, dst_addr, dst_port))
 
-
 import asyncio
 from time import time
 
@@ -98,7 +97,7 @@ class Conexao:
         if (flags & FLAGS_ACK) == FLAGS_ACK and ack_no > self.base_sqe_no:
             self._process_ack(ack_no)
 
-        if (flags & FLAGS_FIN) == FLAGS_FIN:
+        if (flags & FLAGS_FIN) == FLAGS_FIN: # Passo 4
             self._process_fin()
         elif len(payload) > 0:
             self._process_payload(payload)
@@ -126,8 +125,9 @@ class Conexao:
                 self.timer = asyncio.get_event_loop().call_later(self.timeoutInterval, self._timer)
 
     def _process_fin(self):
+        payload = b''
         self.ack_no += 1
-        self._send_ack()
+        self._process_payload(payload)
 
     def _process_payload(self, payload):
         self.callback(self, payload)
@@ -172,10 +172,16 @@ class Conexao:
             self.seg_no_ack.append([segment_flags, len(payload), dst_addr, round(time(), 5)])
             self.seq_no += len(payload)
 
-        
+    # Funcao fechar eh chamada pela funcao dados_recebidos do arquivo exemplo_integracao.py
     def fechar(self):
         """
         Usado pela camada de aplicação para fechar a conexão
         """
-        # TODO: implemente aqui o fechamento de conexão
-        pass
+        dst_addr, dst_port, src_addr, src_port = self.id_conexao
+
+        segment_flags = fix_checksum(make_header(src_port, dst_port, self.seq_no, self.ack_no, FLAGS_FIN), src_addr, dst_addr)
+
+        self.servidor.rede.enviar(segment_flags, dst_addr)
+        # removendo essa conexao do dicionario de conexoes do servidor
+        if self.id_conexao in self.servidor.conexoes:
+            del self.servidor.conexoes[self.id_conexao]
