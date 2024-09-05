@@ -100,12 +100,12 @@ class Conexao:
         exemploRTT = round(time(), 5) - exemploRTT
         if self.RTTestimado is None:
             self.RTTestimado = exemploRTT
-            self.devRTT = exemploRTT/2
+            self.desvioRTT = exemploRTT/2
         else:
             self.RTTestimado = 0.875*self.RTTestimado + 0.125*exemploRTT
-            self.devRTT = 0.75*self.devRTT + 0.25 * abs(exemploRTT-self.RTTestimado)
+            self.desvioRTT = 0.75*self.desvioRTT + 0.25 * abs(exemploRTT-self.RTTestimado)
 
-        self.timeoutInterval = self.RTTestimado + 4*self.devRTT
+        self.timeoutInterval = self.RTTestimado + 4*self.desvioRTT
 
 
     def _rdt_rcv(self, seq_no, ack_no, flags, payload):
