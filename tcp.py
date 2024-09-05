@@ -90,17 +90,43 @@ class Conexao:
             self.servidor.rede.enviar(segmento, dst_addr)
             self.seg_no_ack[0][3] = None
 
+
+    def _atualizar_intervalo_timeout(self):
+        _, _, _, exemploRTT = self.seg_no_ack[0]
+
+        if exemploRTT is None:
+            return
+
+        exemploRTT = round(time(), 5) - exemploRTT
+        if self.RTTestimado is None:
+            self.RTTestimado = exemploRTT
+            self.devRTT = exemploRTT/2
+        else:
+            self.RTTestimado = 0.875*self.RTTestimado + 0.125*exemploRTT
+            self.devRTT = 0.75*self.devRTT + 0.25 * abs(exemploRTT-self.RTTestimado)
+
+        self.timeoutInterval = self.RTTestimado + 4*self.devRTT
+
+
     def _rdt_rcv(self, seq_no, ack_no, flags, payload):
         if seq_no != self.ack_no:
             return
-
         if (flags & FLAGS_ACK) == FLAGS_ACK and ack_no > self.base_sqe_no:
             self._process_ack(ack_no)
+            if self.seg_no_ack:
+                self._atualizar_intervalo_timeout()
+                self.seg_no_ack.pop(0)
+                self.timer.cancel()
+                if self.seg_no_ack:
+                    self.timer = asyncio.get_event_loop().call_later(self.timeoutInterval, self._timer)
 
         if (flags & FLAGS_FIN) == FLAGS_FIN: # Passo 4
             self._process_fin()
         elif len(payload) > 0:
             self._process_payload(payload)
+
+        
+
 
     def _process_ack(self, ack_no):
         self.base_sqe_no = ack_no
@@ -112,15 +138,15 @@ class Conexao:
             sampleRTT = round(time(), 5) - sampleRTT
 
             if self.RTTestimado is None:
-                self.RTTestimado = sampleRTT
                 self.desvioRTT = sampleRTT / 2
+                self.RTTestimado = sampleRTT
             else:
-                self.RTTestimado = 0.875 * self.RTTestimado + 0.125 * sampleRTT
                 self.desvioRTT = 0.75 * self.desvioRTT + 0.25 * abs(sampleRTT - self.RTTestimado)
+                self.RTTestimado = 0.875 * self.RTTestimado + 0.125 * sampleRTT
             self.timeoutInterval = self.RTTestimado + 4 * self.desvioRTT
 
-            self.timer.cancel()
             self.seg_no_ack.pop(0)
+            self.timer.cancel()
             if self.seg_no_ack:
                 self.timer = asyncio.get_event_loop().call_later(self.timeoutInterval, self._timer)
 
